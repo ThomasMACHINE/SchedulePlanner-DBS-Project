@@ -38,6 +38,28 @@ def auth_required(f):
 
     return decorated
 
+
+def administrator_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not auth.username or not auth.password:
+            return jsonify("Login required"), 401
+        
+        email = auth.username
+        password = auth.password 
+        
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT * FROM users WHERE email=%s", (email,))
+        user = cur.fetchone()
+        #Needs to be changed to the number of the column that stores admin flag 
+        if user[0] != 1: 
+            return jsonify("No permission"), 401
+        return f(*args, **kwargs)
+
+    return decorated 
+
+
 @app.route('/') 
 @auth_required
 def index(): 
