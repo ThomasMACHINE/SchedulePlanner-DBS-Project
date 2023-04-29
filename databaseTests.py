@@ -1,7 +1,9 @@
 from flask import Flask, request, jsonify
 from flask_mysqldb import MySQL
+from functools import wraps 
+import bcrypt
 
-app = Flask(__name__) 
+app = Flask(__name__)  
 
 
 app.config['MYSQL_HOST']="localhost"
@@ -9,12 +11,39 @@ app.config['MYSQL_USER']="root"
 app.config['MYSQL_PASSWORD']=""
 app.config['MYSQL_DB']="banking"
 
-mysql = MySQL(app)
+mysql = MySQL(app) 
 
-@app.route('/')
-def index():
-    return "Connected to SchedulePlanner"
+def auth_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not auth.username or not auth.password:
+            return jsonify("Login required"), 401
+        
+        email = auth.username
+        password = auth.password 
+        
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT * FROM users WHERE email=%s", (email,))
+        user = cur.fetchone()
+        
+        if not user: 
+            return jsonify("Invalid email or password"), 401 
+        #Needs to be changed to the number of the column that stores salts
+        salt = user[2].encode('utf-8') 
 
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
+        #Needs to be changed to the number of the column that stores passwords
+        if hashed_password.decode('utf-8') != user[0]:
+            return jsonify("Invalid email or password "), 401
+        return f(*args, **kwargs)
+
+    return decorated
+
+@app.route('/') 
+@auth_required
+def index(): 
+    return "Hello"
 # 1 get_courses_no_lecturer takes nothing
 @app.route('/get_courses_no_lecturer', methods=['GET'])
 def get_courses_no_lecturer_handler(): 
