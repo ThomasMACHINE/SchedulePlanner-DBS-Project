@@ -12,7 +12,6 @@ app.config['MYSQL_PASSWORD']=""
 app.config['MYSQL_DB']="banking"
 
 mysql = MySQL(app) 
-
 def auth_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -26,15 +25,14 @@ def auth_required(f):
         cur = mysql.connection.cursor()
         cur.execute("SELECT * FROM users WHERE email=%s", (email,))
         user = cur.fetchone()
-        
+       
         if not user: 
-            return jsonify("Invalid email or password"), 401 
-        #Needs to be changed to the number of the column that stores salts
-        salt = user[2].encode('utf-8') 
-
-        hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
+            return jsonify("Invalid email or password"), 401  
+        
+        passwd_to_check = bytes(password, 'utf-8') 
         #Needs to be changed to the number of the column that stores passwords
-        if hashed_password.decode('utf-8') != user[0]:
+        passwd = bytes(user[0], 'utf8')
+        if bcrypt.hashpw(passwd_to_check, passwd) != passwd:
             return jsonify("Invalid email or password "), 401
         return f(*args, **kwargs)
 
@@ -44,6 +42,7 @@ def auth_required(f):
 @auth_required
 def index(): 
     return "Hello"
+
 # 1 get_courses_no_lecturer takes nothing
 @app.route('/get_courses_no_lecturer', methods=['GET'])
 def get_courses_no_lecturer_handler(): 
