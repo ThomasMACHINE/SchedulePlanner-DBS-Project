@@ -68,11 +68,11 @@ def index():
 # 1 get_courses_no_lecturer takes nothing
 @app.route('/get_courses_no_lecturer', methods=['GET'])
 def get_courses_no_lecturer_handler(): 
-    return get_courses_no_lecturer()   
-    
+    return get_courses_no_lecturer()  
+
 def get_courses_no_lecturer():
     cur = mysql.connection.cursor()
-    query = "SELECT * FROM `customer` WHERE `customer`.`City` ='Trondheim'" # would need to get every row for courses where lecturer is null
+    query = "SELECT course.*, CourseBooking.roomNo FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID WHERE course.userID IS NULL"
     response = cur.execute(query) 
     if response == 0:
         error_message = 'No courses found'
@@ -82,41 +82,58 @@ def get_courses_no_lecturer():
     return jsonify(courses), 200
 
 # 2 get_courses_with_room_by_teacher_semester takes a teacher and a semester
+# Semester has to be formatted like "2023S" and "2023F"
 @app.route('/get_courses_with_room_by_teacher_semester', methods=['GET'])
 def get_courses_with_room_by_teacher_semester_handler():
     teacher = request.args.get('teacher')
-    semester = request.args.get('semester')
-    if not teacher or not semester:
+    yearAndSemester = request.args.get('semester') 
+    semester = yearAndSemester[-1] 
+    year = yearAndSemester[:-1] 
+    semester_start = ''  
+    semester_end = ''
+    if(semester == 'S'):
+        semester_start = year + '-01-01'  
+        semester_end =  year + '-06-01' 
+    if(semester == 'F'): 
+        semester_start = year + '-06-02'   
+        semester_end =  year + '-12-31'
+    if not teacher or not yearAndSemester:
         error_message = 'Teacher or semester parameter missing'
         return jsonify({'error': error_message}), 400 
-    return get_courses_with_room_by_teacher_semester(teacher, semester) 
+    return get_courses_with_room_by_teacher_semester(teacher, semester_start, semester_end) 
      
 
-def get_courses_with_room_by_teacher_semester(teacher, semester): 
-    cur = mysql.connection.cursor()
-    query = "SELECT * FROM `customer` WHERE `customer`.`City` = %s" # would need to get every course_id where teacher and semester are the same as those given as arguments for a table not yet created. Or check the datetime for the bookings of the courses and see if that time is in the given semester
-    cur.execute(query, (teacher))#cur.execute(query, (teacher, semester))
+
+
+def get_courses_with_room_by_teacher_semester(teacher, semester_start, semester_end): 
+    cur = mysql.connection.cursor() 
+    #First getting the course ID from every course with the correct teacher, then getting every booking with that same course_id + date that is in the same year and is between semester_start and semester_end 
+    query = "SELECT course.* FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID WHERE course.userID = %s AND CourseBooking.date BETWEEN %s AND %s"# would need to get every course_id where teacher and semester are the same as those given as arguments for a table not yet created. Or check the datetime for the bookings of the courses and see if that time is in the given semester
+    cur.execute(query, (teacher, semester_start, semester_end))#cur.execute(query, (teacher, semester))
     courses = cur.fetchall()
-    cur.close()  
+    cur.close()
     if courses == 0:
         error_message = 'No courses found'
         return jsonify({'error': error_message}), 404
-    return jsonify(courses), 200
-# 3 get_courses_by_room_date_timerange a room, a date and a time range (start and end times) 
+    return jsonify(courses), 200 
+
+# 3 get_courses_by_room_date_timerange a room, a date and a time range (start and end times)  
+# The timerange must be in the format start-end, HH:MM:SS-HH:MM:SS, 06:45:11-22:15:34
 @app.route('/get_courses_by_room_date_timerange', methods=['GET'])
 def get_courses_by_room_date_timerange_handler():
     room = request.args.get('room')
     date = request.args.get('date')  
-    time_range = request.args.get('time_range') 
+    time_range = request.args.get('time_range')  
+    time_start, time_end = time_range.split("-")
     if not room or not date or not time_range:
         error_message = 'One or more parameter(s) missing'
         return jsonify({'error': error_message}), 400
-    return get_courses_by_room_date_timerange(room, date, time_range)
+    return get_courses_by_room_date_timerange(room, date, time_start, time_end)
 
-def get_courses_by_room_date_timerange(room, date, time_range): 
+def get_courses_by_room_date_timerange(room, date, time_range_start, time_range_end): 
     cur = mysql.connection.cursor()
-    query = "SELECT * FROM `customer` WHERE `customer`.`City` = 'Trondheim'" #Get all courses in bookings where either the start time or end time is in the given timerange for the given room and date 
-    cur.execute(query, (room,date,time_range))#cur.execute(query, (teacher, semester))
+    query = "SELECT course.* FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID WHERE `CourseBooking`.`roomNo` = %s AND `CourseBooking`.`date` = %s AND `CourseBooking`.`start_time` > %s AND `CourseBooking`.`end_time` < %s" #Get all courses in bookings where either the start time or end time is in the given timerange for the given room and date 
+    cur.execute(query, (room,date,time_range_start,time_range_end))#cur.execute(query, (teacher, semester))
     courses = cur.fetchall()
     cur.close()  
     if courses == 0:
@@ -138,7 +155,7 @@ def get_courses_by_room_date_time_handler():
 
 def get_courses_by_room_date_time(room,date,time): 
     cur = mysql.connection.cursor()
-    query = "SELECT * FROM `customer` WHERE `customer`.`City` ='Trondheim'"# Get all courses for bookings where the times is between the start time and end time for the course
+    query = "SELECT course.* FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID WHERE `CourseBooking`.`roomNo` = %s AND `CourseBooking`.`date` = %s AND `CourseBooking`.`start_time` = %s AND `CourseBooking`.`end_time` = %s"# Get all courses for bookings where the times is between the start time and end time for the course
     response = cur.execute(query, (room, date, time))
     if response == 0:
         error_message = 'No courses found'
@@ -154,7 +171,7 @@ def get_courses_handler():
     
 def get_courses():  
     cur = mysql.connection.cursor()    
-    query = "SELECT * FROM `customer` WHERE `customer`.`City` ='Trondheim'"#Get every course and use the foreign key for teacher to get name and email
+    query = "SELECT course.*, user.name, user.email FROM course INNER JOIN user ON course.user = teacher.ID"#Get every course and use the foreign key for teacher to get name and email
     cur.execute(query)
     courses = cur.fetchall()
     cur.close()
@@ -167,10 +184,11 @@ def get_courses_with_institute_faculty_by_teacher_handler():
     if not teacher:
         error_message = 'Lecturer parameter missing'
         return jsonify({'error': error_message}), 400 
-    return get_courses_with_institute_faculty_by_teacher(teacher)
+    return get_courses_with_institute_faculty_by_teacher(teacher) 
+
 def get_courses_with_institute_faculty_by_teacher(teacher):  
     cur = mysql.connection.cursor()
-    query = "SELECT * FROM `customer` WHERE `customer`.`City` ='Trondheim'"##
+    query = "SELECT course.*, user.faculty, user.institute FROM course INNER JOIN user ON course.user = user.ID WHERE course.user = %s"
     response = cur.execute(query, (teacher,))
     if response == 0:
         error_message = 'No courses found for this lecturer'
@@ -180,19 +198,19 @@ def get_courses_with_institute_faculty_by_teacher(teacher):
     cur.close()
     return jsonify(courses), 200
 
-# 7 get_courses_with_institute_faculty_by_lecturer takes a lecturer
-@app.route('/get_courses_with_institute_faculty_by_lecturer', methods=['GET'])
-def get_courses_with_institute_faculty_by_lecturer_handler():
+# 7 get_courses_with_room_by_lecturer takes a lecturer
+@app.route('/get_courses_with_room_by_lecturer', methods=['GET'])
+def get_courses_with_room_by_lecturer_handler():
     lecturer = request.args.get('lecturer')
     if not lecturer:
         error_message = 'Lecturer parameter missing'
         return jsonify({'error': error_message}), 400
-    return get_courses_with_institute_faculty_by_lecturer(lecturer)
+    return get_courses_with_room_by_lecturer(lecturer)
 
 
-def get_courses_with_institute_faculty_by_lecturer(lecturer):
+def get_courses_with_room_by_lecturer(lecturer):
     cur = mysql.connection.cursor()
-    query = "SELECT * FROM `customer` WHERE `customer`.`City` ='Trondheim'"#Just get the room number from the booking where the courseId are the same as those where the parameter matches a lecturer
+    query = "SELECT course.*, CourseBooking.roomNo FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID WHERE `course`.`user` = %s"#Just get the room number from the booking where the courseId are the same as those where the parameter matches a lecturer
     response = cur.execute(query, (lecturer,))
     if response == 0:
         error_message = 'No courses found for this lecturer'
@@ -207,17 +225,37 @@ def get_courses_with_institute_faculty_by_lecturer(lecturer):
 @app.route('/get_avaiable_rooms_by_date_timerange', methods=['GET'])
 def get_avaiable_rooms_by_date_timerange_handler():
     date = request.args.get('date')
-    start_time = request.args.get('start_time')
-    end_time = request.args.get('end_time')
-    if not date or not start_time or not end_time:
-        error_message = 'Date, start_time, or end_time parameter missing'
+    time_range = request.args.get('time_range')  
+    time_start, time_end = time_range.split("-")
+    if not date or not time_range:
+        error_message = 'Date or time_range parameter missing'
         return jsonify({'error': error_message}), 400 
-    return get_avaiable_rooms_by_date_timerange_handler(date,start_time,end_time) 
-
+    return get_avaiable_rooms_by_date_timerange_handler(date,time_start,time_end) 
+#Shows only rooms that are available for the entire time range given 
 def get_avaiable_rooms_by_date_timerange_handler(date,start_time,end_time):
     cur = mysql.connection.cursor()
-    query = "SELECT * FROM `customer` WHERE `customer`.`City` ='Trondheim'"#Gets the roomNo of all the rooms that are not in bookings where an end time or a start time is between the given time range 
-    response = cur.execute(query, (date, start_time, end_time))
+    user_query = """
+        SELECT room.* 
+        FROM room
+        WHERE room.roomNo NOT IN (
+            SELECT CourseBooking.roomNo
+            FROM CourseBooking 
+            WHERE  CourseBooking.Date = %s AND (CourseBooking.start_time BETWEEN %s AND %s OR CourseBooking.end_time BETWEEN %s AND %s)
+        )
+    """
+
+    course_query = """
+        SELECT room.*
+        FROM room
+        WHERE room.roomNo NOT IN (
+            SELECT UserBooking.roomNo
+            FROM UserBooking
+            WHERE UserBooking.Date = %s AND (UserBooking.start_time BETWEEN %s AND %s OR UserBooking.end_time BETWEEN %s AND %s)
+        )
+    """
+
+    query = f"{user_query} UNION {course_query}" 
+    response = cur.execute(query, (date, start_time, end_time, start_time, end_time, date, start_time, end_time, start_time, end_time,))
     if response == 0:
         error_message = 'No available rooms found'
         return jsonify({'error': error_message}), 404
@@ -238,7 +276,7 @@ def get_bookings_with_room_building_by_user_handler():
 
 def get_bookings_with_room_building_by_user(user): 
     cur = mysql.connection.cursor()
-    query = "SELECT * FROM `customer` WHERE `customer`.`City` ='Trondheim'"#Get all bookings where the user is the same as the given one
+    query = "SELECT UserBooking.* FROM UserBooking WHERE UserBooking.userId = %s"#Get all bookings where the user is the same as the given one
     response = cur.execute(query, (user,))
     if response == 0:
         error_message = 'No bookings found for this user'
@@ -256,13 +294,13 @@ def get_rooms_with_bookings_and_booker_handler():
 
 def get_rooms_with_bookings_and_booker():
     cur = mysql.connection.cursor()
-    query = "SELECT * FROM `customer` WHERE `customer`.`City` ='Trondheim'"#Get all rooms from room table and for each room show their bookings(with username from booking)
-    response = cur.execute(query)
-    if response == 0:
-        error_message = 'No rooms with bookings found'
-        return jsonify({'error': error_message}), 404
-
-    rooms = cur.fetchall()
+    query = "SELECT * FROM room"#Get all rooms from room table and for each room show their bookings(with username from booking)
+    cur.execute(query) 
+    rooms = [] 
+    for room in cur.fetchall(): 
+        userBookingsWithNames = cur.execute("SELECT UserBooking.* , users.firstName , users.lastName FROM UserBooking INNER JOIN users on UserBooking.userId = users.Id WHERE UserBooking.roomNo = %s",(room[0],)) 
+        courseBookingsWithNames  = cur.execute("SELECT CourseBooking.*",(room[0],)) 
+        rooms.append(room + userBookingsWithNames + courseBookingsWithNames)
     cur.close()
     return jsonify(rooms), 200
 
