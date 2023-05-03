@@ -298,25 +298,32 @@ def get_rooms_with_bookings_and_booker():
     cur.execute(query) 
     rooms = [] 
     for room in cur.fetchall(): 
-        userBookingsWithNames = cur.execute("SELECT UserBooking.* , users.firstName , users.lastName FROM UserBooking INNER JOIN users on UserBooking.userId = users.Id WHERE UserBooking.roomNo = %s",(room[0],)) 
-        courseBookingsWithNames  = cur.execute("SELECT CourseBooking.*",(room[0],)) 
+        cur.execute("SELECT UserBooking.* , Users.firstName , Users.lastName FROM UserBooking INNER JOIN User on UserBooking.userId = users.Id WHERE UserBooking.roomNo = %s",(room[0],)) 
+        userBookingsWithNames= cur.fetchall()
+        cur.execute("SELECT CourseBooking.* , Course.name FROM CourseBooking INNER JOIN Course on CourseBooking.courseId = course.Id WHERE CourseBooking.roomNo = %s",(room[0],)) 
+        courseBookingsWithNames = cur.fetchall()
         rooms.append(room + userBookingsWithNames + courseBookingsWithNames)
     cur.close()
     return jsonify(rooms), 200
 
 
-# 11 get_rooms_with_number_of_bookings takes nothing
+# 11 get_rooms_with_number_of_bookings takes nothing 
+# First get all rooms. For each room, do two different queries 
 @app.route('/get_rooms_with_number_of_bookings', methods=['GET'])
 def get_rooms_with_number_of_bookings_handler(): 
     return get_rooms_with_number_of_bookings() 
 def get_rooms_with_number_of_bookings(): 
     cur = mysql.connection.cursor()
-    query = "SELECT * FROM `customer` WHERE `customer`.`City` ='Trondheim'"#
-    response = cur.execute(query)
-    if response == 0:
-        error_message = 'No rooms found'
-        return jsonify({'error': error_message}), 404
-
+    query = "SELECT * FROM room"
+    cur.execute(query)
+    rooms = [] 
+    for room in cur.fetchall(): 
+        cur.execute("SELECT COUNT(*) FROM UserBooking WHERE roomNo = %s", (room[0],)) 
+        numberOfUserBookings = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM CourseBooking WHERE roomNo = %s", (room[0],))  
+        numberOfCourseBookings = cur.fetchone()[0]
+        rooms.append( room + (numberOfUserBookings, numberOfCourseBookings))
+    cur.close()
     rooms = cur.fetchall()
     cur.close()
     return jsonify(rooms), 200
@@ -328,7 +335,10 @@ def get_teachers_with_courses_and_course_locations_handler():
     return get_teachers_with_courses_and_course_locations() 
 def get_teachers_with_courses_and_course_locations(): 
     cur = mysql.connection.cursor()
-    query = "SELECT * FROM `customer` WHERE `customer`.`City` ='Trondheim'"
+    query = """SELECT Teacher.*, Course.*, CourseBooking.roomNo 
+            FROM Teacher 
+            LEFT JOIN Course ON Teacher.Id = Course.teacherId 
+            LEFT JOIN CourseBooking ON Course.Id = CourseBooking.courseID;"""
     response = cur.execute(query)
     if response == 0:
         error_message = 'No teachers found'
@@ -345,7 +355,7 @@ def get_teachers_with_teaching_hours_handler():
     return get_teachers_with_teaching_hours() 
 def get_teachers_with_teaching_hours(): 
     cur = mysql.connection.cursor()
-    query = "SELECT * FROM `customer` WHERE `customer`.`City` ='Trondheim'"
+    query = "SELECT Teacher.Id FROM Teacher LEFT JOIN"
     response = cur.execute(query)
     if response == 0:
         error_message = 'No teachers found'
@@ -380,7 +390,7 @@ def get_teachers_with_average_numberstudents_handler():
 
 def get_teachers_with_average_numberstudents(): 
     cur = mysql.connection.cursor()
-    query = "SELECT * FROM `customer` WHERE `customer`.`City` ='Trondheim'"
+    query = "SELECT course.teacherId, AVG(course.students) FROM course ORDER BY AVG(course.students) DESC;"
     response = cur.execute(query)
     if response == 0:
         error_message = 'No teachers found'
@@ -389,6 +399,9 @@ def get_teachers_with_average_numberstudents():
     teachers = cur.fetchall()
     cur.close()
     return jsonify(teachers), 200 
+
+if __name__ == '__main__':
+    app.run(debug=True) 
 
 if __name__ == '__main__':
     app.run(debug=True) 
