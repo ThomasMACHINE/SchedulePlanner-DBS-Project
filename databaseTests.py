@@ -65,6 +65,8 @@ def administrator_required(f):
 def index(): 
     return "Hello"
 
+
+
 # 1 get_courses_no_lecturer takes nothing
 @app.route('/get_courses_no_lecturer', methods=['GET'])
 def get_courses_no_lecturer_handler(): 
@@ -72,7 +74,7 @@ def get_courses_no_lecturer_handler():
 
 def get_courses_no_lecturer():
     cur = mysql.connection.cursor()
-    query = "SELECT course.*, CourseBooking.roomNo FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID WHERE course.userID IS NULL"
+    query = "SELECT course.*, CourseBooking.roomNo, building.Name FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID LEFT JOIN rooms ON rooms.roomNo = CourseBooking.roomNo LEFT JOIN building ON rooms.buildingId = building.Id WHERE course.userID IS NULL"
     response = cur.execute(query) 
     if response == 0:
         error_message = 'No courses found'
@@ -210,7 +212,7 @@ def get_courses_with_room_by_lecturer_handler():
 
 def get_courses_with_room_by_lecturer(lecturer):
     cur = mysql.connection.cursor()
-    query = "SELECT course.*, CourseBooking.roomNo FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID WHERE course.userId = %s"#Just get the room number from the booking where the courseId are the same as those where the parameter matches a lecturer
+    query = "SELECT course.*, CourseBooking.roomNo, building.Name FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID LEFT JOIN rooms ON rooms.roomNo = CourseBooking.roomNo LEFT JOIN building ON rooms.buildingId = building.Id  WHERE course.userId = %s"#Just get the room number from the booking where the courseId are the same as those where the parameter matches a lecturer
     response = cur.execute(query, (lecturer,))
     if response == 0:
         error_message = 'No courses found for this lecturer'
@@ -269,7 +271,7 @@ def get_bookings_with_room_building_by_user_handler():
 
 def get_bookings_with_room_building_by_user(user): 
     cur = mysql.connection.cursor()
-    query = "SELECT roomNo, date, CONCAT(start_Time), CONCAT(end_Time), userId FROM UserBooking WHERE UserBooking.userId = %s"#Get all bookings where the user is the same as the given one
+    query = "SELECT UserBooking.roomNo, date, CONCAT(start_Time), CONCAT(end_Time), userId, building.Name FROM UserBooking LEFT JOIN rooms ON rooms.roomNo = UserBooking.roomNo LEFT JOIN building ON rooms.buildingId = building.Id WHERE UserBooking.userId = %s"#Get all bookings where the user is the same as the given one
     response = cur.execute(query, (user,))
     if response == 0:
         error_message = 'No bookings found for this user'
@@ -340,10 +342,12 @@ def get_teachers_with_courses_and_course_locations_handler():
     return get_teachers_with_courses_and_course_locations() 
 def get_teachers_with_courses_and_course_locations(): 
     cur = mysql.connection.cursor()
-    query = """SELECT Teacher.*, Course.*, CourseBooking.roomNo 
+    query = """SELECT Teacher.*, Course.*, CourseBooking.roomNo, building.Name
             FROM Teacher 
             LEFT JOIN Course ON Teacher.userId = Course.userId 
-            LEFT JOIN CourseBooking ON Course.Id = CourseBooking.courseID;"""
+            LEFT JOIN CourseBooking ON Course.Id = CourseBooking.courseID
+            LEFT JOIN rooms ON rooms.roomNo = CourseBooking.roomNo 
+            LEFT JOIN building ON rooms.buildingId = building.Id; """
     response = cur.execute(query)
     if response == 0:
         error_message = 'No teachers found'
