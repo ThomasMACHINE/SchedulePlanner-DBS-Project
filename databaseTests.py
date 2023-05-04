@@ -11,7 +11,9 @@ app.config['MYSQL_USER']="root"
 app.config['MYSQL_PASSWORD']=""
 app.config['MYSQL_DB']="prosjekt"
 
-mysql = MySQL(app) 
+mysql = MySQL(app)
+
+# Authorization
 def auth_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -38,7 +40,7 @@ def auth_required(f):
 
     return decorated
 
-
+# The function checks if a user has admin access
 def administrator_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -59,15 +61,21 @@ def administrator_required(f):
 
     return decorated 
 
-
 @app.route('/') 
 @auth_required
 def index(): 
     return "Hello"
 
-
-
-# 1 get_courses_no_lecturer takes nothing
+# Queries for the project:
+#
+# Handler functionality has been implemented to handle different
+# kinds of queries. Many of the tasks are answered
+# by using a handler that calls or uses other functions.
+#
+# 1 get_courses_no_lecturer takes no argument. The query shows 
+# a list of all courses that have not been assigned a lecturer, 
+# along with the room number and building name where each course is held.
+and building name where each course is held.
 @app.route('/get_courses_no_lecturer', methods=['GET'])
 def get_courses_no_lecturer_handler(): 
     return get_courses_no_lecturer()  
@@ -84,7 +92,10 @@ def get_courses_no_lecturer():
     return jsonify(courses), 200
 
 # 2 get_courses_with_room_by_teacher_semester takes a teacher and a semester
-# Semester has to be formatted like "2023S" and "2023F"
+# as arguments.
+# Semester has to be formatted like "2023S" (spring) and "2023F" (fall)
+#
+# The query shows a list of all courses taught by a specific teacher in a given semester.
 @app.route('/get_courses_with_room_by_teacher_semester', methods=['GET'])
 def get_courses_with_room_by_teacher_semester_handler():
     teacher = request.args.get('teacher')
@@ -109,7 +120,8 @@ def get_courses_with_room_by_teacher_semester_handler():
 
 def get_courses_with_room_by_teacher_semester(teacher, semester_start, semester_end): 
     cur = mysql.connection.cursor() 
-    #First getting the course ID from every course with the correct teacher, then getting every booking with that same course_id + date that is in the same year and is between semester_start and semester_end 
+    # First getting the course ID from every course with the correct teacher, then getting every booking with that same course_id 
+    # + date that is in the same year and is between semester_start and semester_end 
     query = "SELECT course.* FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID WHERE course.userID = %s AND CourseBooking.date BETWEEN %s AND %s"# would need to get every course_id where teacher and semester are the same as those given as arguments for a table not yet created. Or check the datetime for the bookings of the courses and see if that time is in the given semester
     cur.execute(query, (teacher, semester_start, semester_end))#cur.execute(query, (teacher, semester))
     courses = cur.fetchall()
@@ -119,9 +131,9 @@ def get_courses_with_room_by_teacher_semester(teacher, semester_start, semester_
         return jsonify({'error': error_message}), 404
     return jsonify(courses), 200 
 
-# 3 get_courses_by_room_date_timerange a room, a date and a time range (start and end times)  
-# The timerange must be in the format start-end, HH:MM:SS-HH:MM:SS, 06:45:11-22:15:34
+# 3: Show a list of all courses taught in a specific room on a given date and a specific time range.
 @app.route('/get_courses_by_room_date_timerange', methods=['GET'])
+# get_courses_by_room_date_timerange_handler()
 def get_courses_by_room_date_timerange_handler():
     room = request.args.get('room')
     date = request.args.get('date')  
@@ -132,9 +144,16 @@ def get_courses_by_room_date_timerange_handler():
         return jsonify({'error': error_message}), 400
     return get_courses_by_room_date_timerange(room, date, time_start, time_end)
 
+
+# # get_courses_by_room_date_timerange takes the following arguments:
+# * a room
+# * a date
+# * a time range (start and end times)  
+# The timerange must be in the format start-end, HH:MM:SS-HH:MM:SS, 06:45:11-22:15:34
 def get_courses_by_room_date_timerange(room, date, time_range_start, time_range_end): 
     cur = mysql.connection.cursor()
-    query = "SELECT course.* FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID WHERE `CourseBooking`.`roomNo` = %s AND `CourseBooking`.`date` = %s AND `CourseBooking`.`start_time` > %s AND `CourseBooking`.`end_time` < %s" #Get all courses in bookings where either the start time or end time is in the given timerange for the given room and date 
+    #Get all courses in bookings where either the start time or end time is in the given timerange for the given room and date 
+    query = "SELECT course.* FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID WHERE `CourseBooking`.`roomNo` = %s AND `CourseBooking`.`date` = %s AND `CourseBooking`.`start_time` > %s AND `CourseBooking`.`end_time` < %s" 
     cur.execute(query, (room,date,time_range_start,time_range_end))#cur.execute(query, (teacher, semester))
     courses = cur.fetchall()
     cur.close()  
@@ -142,8 +161,10 @@ def get_courses_by_room_date_timerange(room, date, time_range_start, time_range_
         error_message = 'No courses found'
         return jsonify({'error': error_message}), 404
     return jsonify(courses), 200
-# 4 get_courses_by_room_date_time takes a room, a date and time 
+
+# 4: Show a list of all courses taught in a specific room on a given date and at a specific time.
 @app.route('/get_courses_by_room_date_time', methods=['GET'])
+# get_courses_by_room_date_time_handler()
 def get_courses_by_room_date_time_handler():
     room = request.args.get('room')
     date = request.args.get('date')
@@ -153,11 +174,14 @@ def get_courses_by_room_date_time_handler():
         return jsonify({'error': error_message}), 400 
     return get_courses_by_room_date_time(room,date,time)
 
-
-
+# get_courses_by_room_date_time takes the following arguments
+# * a room
+# * a date
+# * time
 def get_courses_by_room_date_time(room,date,time): 
     cur = mysql.connection.cursor()
-    query = "SELECT course.* FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID WHERE `CourseBooking`.`roomNo` = %s AND `CourseBooking`.`date` = %s AND  %s BETWEEN `CourseBooking`.`start_time` AND `CourseBooking`.`end_time`"# Get all courses for bookings where the times is between the start time and end time for the course
+    # Get all courses for bookings where the times is between the start time and end time for the course
+    query = "SELECT course.* FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID WHERE `CourseBooking`.`roomNo` = %s AND `CourseBooking`.`date` = %s AND  %s BETWEEN `CourseBooking`.`start_time` AND `CourseBooking`.`end_time`"
     response = cur.execute(query, (room, date, time))
     if response == 0:
         error_message = 'No courses found'
@@ -166,21 +190,26 @@ def get_courses_by_room_date_time(room,date,time):
     cur.close()
     return jsonify(courses), 200
 
-# 5 get_courses takes nothing
+# 5: Show a list of all courses, along with the name and email of the teacher teaching each course
 @app.route('/get_courses', methods=['GET'])
+# get_courses_handler():
 def get_courses_handler():
     return get_courses()
-    
+
+# get_courses takes no arguments  
 def get_courses():  
-    cur = mysql.connection.cursor()    
-    query = "SELECT course.*, users.FirstName, users.email FROM course INNER JOIN users ON course.userId = users.Id"#Get every course and use the foreign key for teacher to get name and email
+    cur = mysql.connection.cursor()
+    #Get every course and use the foreign key for teacher to get name and email
+    query = "SELECT course.*, users.FirstName, users.email FROM course INNER JOIN users ON course.userId = users.Id"
     cur.execute(query)
     courses = cur.fetchall()
     cur.close()
     return jsonify(courses), 200
 
-# 6 get_courses_with_institute_faculty_by_teacher takes a teacher 
+# 6 Show a list of all courses taught by a specific teacher, along with the institute and faculty
+where each course belongs 
 @app.route('/get_courses_with_institute_faculty_by_teacher', methods=['GET'])
+# get_courses_with_institute_faculty_by_teacher_handler()
 def get_courses_with_institute_faculty_by_teacher_handler():
     teacher = request.args.get('teacher')
     if not teacher:
@@ -188,6 +217,7 @@ def get_courses_with_institute_faculty_by_teacher_handler():
         return jsonify({'error': error_message}), 400 
     return get_courses_with_institute_faculty_by_teacher(teacher) 
 
+# get_courses_with_institute_faculty_by_teacher takes a teacher as an argument. 
 def get_courses_with_institute_faculty_by_teacher(teacher):  
     cur = mysql.connection.cursor()
     query = "SELECT course.*, teacher.faculty, teacher.institute FROM course INNER JOIN teacher ON course.userId = teacher.userId WHERE course.userId = %s"
@@ -200,7 +230,8 @@ def get_courses_with_institute_faculty_by_teacher(teacher):
     cur.close()
     return jsonify(courses), 200
 
-# 7 get_courses_with_room_by_lecturer takes a lecturer
+# 7: Show a list of all courses taught by a specific lecturer, along with the room number and
+# building name where each course is held.
 @app.route('/get_courses_with_room_by_lecturer', methods=['GET'])
 def get_courses_with_room_by_lecturer_handler():
     lecturer = request.args.get('lecturer')
@@ -209,10 +240,11 @@ def get_courses_with_room_by_lecturer_handler():
         return jsonify({'error': error_message}), 400
     return get_courses_with_room_by_lecturer(lecturer)
 
-
+# get_courses_with_room_by_lecturer takes a lecturer as an argument
 def get_courses_with_room_by_lecturer(lecturer):
     cur = mysql.connection.cursor()
-    query = "SELECT course.*, CourseBooking.roomNo, building.Name FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID LEFT JOIN rooms ON rooms.roomNo = CourseBooking.roomNo LEFT JOIN building ON rooms.buildingId = building.Id  WHERE course.userId = %s"#Just get the room number from the booking where the courseId are the same as those where the parameter matches a lecturer
+    #Just get the room number from the booking where the courseId are the same as those where the parameter matches a lecturer
+    query = "SELECT course.*, CourseBooking.roomNo, building.Name FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID LEFT JOIN rooms ON rooms.roomNo = CourseBooking.roomNo LEFT JOIN building ON rooms.buildingId = building.Id  WHERE course.userId = %s"
     response = cur.execute(query, (lecturer,))
     if response == 0:
         error_message = 'No courses found for this lecturer'
@@ -222,9 +254,9 @@ def get_courses_with_room_by_lecturer(lecturer):
     cur.close()
     return jsonify(data), 200
 
-
-# 8 get_avaiable_rooms_by_date_timerange takes a date and time range (start and end times)
+# 8: Show a list of all rooms available for a given date and time range
 @app.route('/get_avaiable_rooms_by_date_timerange', methods=['GET'])
+#get_avaiable_rooms_by_date_timerange_handler()
 def get_avaiable_rooms_by_date_timerange_handler():
     date = request.args.get('date')
     time_range = request.args.get('time_range')  
@@ -233,7 +265,12 @@ def get_avaiable_rooms_by_date_timerange_handler():
         error_message = 'Date or time_range parameter missing' 
         return jsonify({'error': error_message}), 400 
     return get_avaiable_rooms_by_date_timerange_handler(date,time_start,time_end) 
-#Shows only rooms that are available for the entire time range given 
+
+# get_avaiable_rooms_by_date_timerange takes the following arguments:
+# * a date
+# * start time
+# * end times
+# It shows only rooms that are available for the entire time range given 
 def get_avaiable_rooms_by_date_timerange_handler(date,start_time,end_time):
     cur = mysql.connection.cursor()
     query = """
@@ -260,8 +297,10 @@ def get_avaiable_rooms_by_date_timerange_handler(date,start_time,end_time):
     return jsonify(rooms), 200
 
 
-# 9 get_bookings_with_room_building_by_user takes a user
+# 9: Show a list of all reservations made by a specific user, along with the room number and
+# building name for each reservation.
 @app.route('/get_bookings_with_room_building_by_user', methods=['GET'])
+# get_bookings_with_room_building_by_user_handler()
 def get_bookings_with_room_building_by_user_handler():
     user = request.args.get('user')
     if not user:
@@ -269,6 +308,7 @@ def get_bookings_with_room_building_by_user_handler():
         return jsonify({'error': error_message}), 400 
     return get_bookings_with_room_building_by_user(user) 
 
+# get_bookings_with_room_building_by_user takes a user
 def get_bookings_with_room_building_by_user(user): 
     cur = mysql.connection.cursor()
     query = "SELECT UserBooking.roomNo, date, CONCAT(start_Time), CONCAT(end_Time), userId, building.Name FROM UserBooking LEFT JOIN rooms ON rooms.roomNo = UserBooking.roomNo LEFT JOIN building ON rooms.buildingId = building.Id WHERE UserBooking.userId = %s"#Get all bookings where the user is the same as the given one
@@ -282,11 +322,14 @@ def get_bookings_with_room_building_by_user(user):
     return jsonify(bookings), 200
 
 
-# 10 get_rooms_with_bookings_and_booker takes nothing
+# 10: Show a list of all rooms and the reservations made for each room, including the name of the
+# person who made each reservation
 @app.route('/get_rooms_with_bookings_and_booker', methods=['GET'])
+# get_rooms_with_bookings_and_booker_handler()
 def get_rooms_with_bookings_and_booker_handler(): 
     return get_rooms_with_bookings_and_booker() 
 
+# get_rooms_with_bookings_and_booker takes no arguments
 def get_rooms_with_bookings_and_booker():
     cur = mysql.connection.cursor()
     query = "SELECT * FROM rooms"#Get all rooms from room table and for each room show their bookings(with username from booking)
@@ -302,11 +345,13 @@ def get_rooms_with_bookings_and_booker():
     return jsonify(rooms), 200
 
 
-# 11 get_rooms_with_number_of_bookings takes nothing 
-# First get all rooms. For each room, do two different queries 
+# 11. Show a list of all rooms, along with the number and type of reservations made for each room.
 @app.route('/get_rooms_with_number_of_bookings', methods=['GET'])
+# get_rooms_with_number_of_bookings_handler()
 def get_rooms_with_number_of_bookings_handler(): 
-    return get_rooms_with_number_of_bookings() 
+    return get_rooms_with_number_of_bookings()
+# get_rooms_with_number_of_bookings takes no arguments 
+# First get all rooms. For each room, do two different queries 
 def get_rooms_with_number_of_bookings(): 
     cur = mysql.connection.cursor()
     query = "SELECT * FROM rooms"
@@ -321,12 +366,15 @@ def get_rooms_with_number_of_bookings():
     cur.close()
     return jsonify(rooms), 200 
 
-# 12 get_rooms_with_number_of_bookings takes nothing 
-# First get all rooms. For each room, do two different queries 
+# 12: Show a list of all teachers and the number of courses they are teaching in
+#  each semester, sorted by the number of courses.
 @app.route('/get_teachers_number_courses', methods=['GET'])
+# get_teachers_number_courses_handler()
 def get_teachers_number_courses_handler(): 
-    return get_teachers_number_courses()   
+    return get_teachers_number_courses()  
 
+# get_rooms_with_number_of_bookings takes no arguments 
+# First get all rooms. For each room, do two different queries 
 def get_teachers_number_courses(): 
     cur = mysql.connection.cursor()
     query = "SELECT Teacher.userId, COUNT(course.userId) FROM Teacher LEFT JOIN course ON teacher.userId = course.userId GROUP BY teacher.userId ORDER BY COUNT(course.userId) DESC"
@@ -336,10 +384,14 @@ def get_teachers_number_courses():
     return jsonify(teachers), 200
 
 
-# 13 get_teachers_with_courses_and_course_locations takes nothing
+# 13: Show a list of all teachers and the courses, they teach, including the 
+# room number and building name where each course is held.
 @app.route('/get_teachers_with_courses_and_course_locations', methods=['GET'])
+# get_teachers_with_courses_and_course_locations_handler()
 def get_teachers_with_courses_and_course_locations_handler(): 
-    return get_teachers_with_courses_and_course_locations() 
+    return get_teachers_with_courses_and_course_locations()
+
+# get_teachers_with_courses_and_course_locations takes no arguments
 def get_teachers_with_courses_and_course_locations(): 
     cur = mysql.connection.cursor()
     query = """SELECT Teacher.*, Course.*, CourseBooking.roomNo, building.Name
@@ -358,10 +410,12 @@ def get_teachers_with_courses_and_course_locations():
     return jsonify(teachers), 200
 
 
-# 14 get_teachers_with_teaching_hours takes nothing
+# 14: Show a list of all teachers and the total number of hours they teach each week.
 @app.route('/get_teachers_with_teaching_hours', methods=['GET'])
+# get_teachers_with_teaching_hours_handler()
 def get_teachers_with_teaching_hours_handler(): 
     return get_teachers_with_teaching_hours() 
+# get_teachers_with_teaching_hours takes no arguments
 def get_teachers_with_teaching_hours(): 
     cur = mysql.connection.cursor()
     query = "SELECT teacher.userId, WEEK(CourseBooking.Date), SUM(TIMEDIFF(CourseBooking.end_time, CourseBooking.start_time)) FROM Teacher LEFT JOIN Course ON Teacher.userId = Course.userId INNER JOIN CourseBooking ON Course.id = CourseBooking.courseId GROUP BY Teacher.userId, WEEK(CourseBooking.Date)"
@@ -374,11 +428,13 @@ def get_teachers_with_teaching_hours():
     cur.close()
     return jsonify(teachers), 200
 
-
-# 15 get_monday_courses_with_teachers_info takes nothing
+# 15: Show a list of all courses that are taught on Mondays, along with the name and
+# email of the teachers teaching each course.
 @app.route('/get_monday_courses_with_teachers_info', methods=['GET'])
+# get_monday_courses_with_teachers_info_handler()
 def get_monday_courses_with_teachers_info_handler(): 
     return get_monday_courses_with_teachers_info() 
+# 15 get_monday_courses_with_teachers_info takes no arguments
 def get_monday_courses_with_teachers_info():
     cur = mysql.connection.cursor()
     query = "SELECT Course.*, CONCAT(users.firstName, ' ', users.lastName), users.email FROM Course LEFT JOIN Users ON Course.userId = Users.Id INNER JOIN CourseBooking ON Course.id = CourseBooking.courseId WHERE DAYNAME(CourseBooking.Date) = 'Monday'"
@@ -392,11 +448,14 @@ def get_monday_courses_with_teachers_info():
     return jsonify(teachers), 200
 
 
-# 16 get_teachers_withaverage_numberstudents takes nothing, sorted by students
+# 16:Show a list of all teachers and the average number of students in the courses they teach,
+# sorted by the average number of students.
 @app.route('/get_teachers_with_average_number_students', methods=['GET'])
+# get_teachers_with_average_numberstudents_handler()
 def get_teachers_with_average_numberstudents_handler(): 
     return get_teachers_with_average_numberstudents()  
-
+# 16 get_teachers_withaverage_numberstudents takes no arguments
+# The tables get sorted by students
 def get_teachers_with_average_numberstudents(): 
     cur = mysql.connection.cursor()
     query = "SELECT Course.userId, AVG(Course.studentCount) FROM Course ORDER BY AVG(Course.studentCount) DESC;"
