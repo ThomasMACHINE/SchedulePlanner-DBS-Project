@@ -95,7 +95,7 @@ def get_courses_no_lecturer_handler():
 
 def get_courses_no_lecturer():
     cur = mysql.connection.cursor()
-    query = "SELECT course.*, CourseBooking.roomNo, building.Name FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID LEFT JOIN rooms ON rooms.roomNo = CourseBooking.roomNo LEFT JOIN building ON rooms.buildingId = building.Id WHERE course.userID IS NULL"
+    query = "SELECT course.*, CourseBooking.roomNo, building.Name FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID LEFT JOIN room ON room.roomNo = CourseBooking.roomNo LEFT JOIN building ON room.buildingId = building.Id WHERE course.userID IS NULL"
     response = cur.execute(query) 
     if response == 0:
         error_message = 'No courses found'
