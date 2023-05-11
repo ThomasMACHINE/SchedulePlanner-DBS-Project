@@ -9,7 +9,7 @@ app = Flask(__name__)
 app.config['MYSQL_HOST']="localhost"
 app.config['MYSQL_USER']="root"
 app.config['MYSQL_PASSWORD']=""
-app.config['MYSQL_DB']="prosjekt"
+app.config['MYSQL_DB']="finalassignment"
 
 mysql = MySQL(app)
 
@@ -55,28 +55,19 @@ def administrator_required(f):
             return jsonify("No permission"), 401
         return f(*args, **kwargs)
 
-    return decorated 
+    return decorated  
 
 @app.route('/') 
 @auth_required 
-@administrator_required
-def index(): 
+def root(): 
     return "Hello"
 
-@app.route('/create_user', methods=['POST'])
-def create_user():
-    email = request.args.get('email')
-    password = request.args.get('password')
-    
-    if not email or not password:
-        return jsonify("Email and password required"), 400
-    salt = bcrypt.gensalt()
-    hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
-    cur = mysql.connection.cursor() 
-    cur.execute("INSERT INTO `users` (Password, Email, Administrator_flag) VALUES (%s, %s, %s)", (hashed_password, email, 1))
-    mysql.connection.commit()
-    
-    return jsonify("User created successfully"), 201 
+
+@app.route('/administrator') 
+@auth_required 
+@administrator_required
+def administrator(): 
+    return "Logged in as administrator"
 
 
 
@@ -98,7 +89,7 @@ def get_courses_no_lecturer():
     query = "SELECT course.*, CourseBooking.roomNo, building.Name FROM course INNER JOIN CourseBooking ON course.ID = CourseBooking.courseID LEFT JOIN room ON room.roomNo = CourseBooking.roomNo LEFT JOIN building ON room.buildingId = building.Id WHERE course.userID IS NULL"
     response = cur.execute(query) 
     if response == 0:
-        error_message = 'No courses found'
+        error_message = 'No courses without lecturer found'
         return jsonify({'error': error_message}), 404
     courses = cur.fetchall()
     cur.close()
@@ -399,15 +390,13 @@ def get_teachers_with_courses_and_course_locations():
     cur.close()
     return jsonify(teachers), 200
 
-
-# 15: Show a list of all courses that are taught on Mondays, along with the name and
-# email of the teachers teaching each course.
+#14. Show a list of all teachers and the total number of hours they teach each week.
 @app.route('/get_teachers_with_teaching_hours', methods=['GET'])
 def get_teachers_with_teaching_hours_handler(): 
     return get_teachers_with_teaching_hours() 
 def get_teachers_with_teaching_hours(): 
     cur = mysql.connection.cursor()
-    query = "SELECT teacher.userId, WEEK(CourseBooking.Date), SUM(TIMEDIFF(CourseBooking.end_time, CourseBooking.start_time)) FROM Teacher LEFT JOIN Course ON Teacher.userId = Course.userId INNER JOIN CourseBooking ON Course.id = CourseBooking.courseId GROUP BY Teacher.userId, WEEK(CourseBooking.Date)"
+    query = "SELECT teacher.userId, WEEK(CourseBooking.Date), SUM(TIMEDIFF(CourseBooking.end_time, CourseBooking.start_time)) FROM Teacher LEFT JOIN Course ON Teacher.userId = Course.userId LEFT JOIN CourseBooking ON Course.id = CourseBooking.courseId GROUP BY Teacher.userId, WEEK(CourseBooking.Date)"
     response = cur.execute(query)
     if response == 0:
         error_message = 'No teachers found'
@@ -418,8 +407,8 @@ def get_teachers_with_teaching_hours():
     return jsonify(teachers), 200
 
 
-# 16:Show a list of all teachers and the average number of students in the courses they teach,
-# sorted by the average number of students.
+#15. Show a list of all courses that are taught on Mondays, along with the name and email of the
+#teachers teaching each course.
 @app.route('/get_monday_courses_with_teachers_info', methods=['GET'])
 def get_monday_courses_with_teachers_info_handler(): 
     return get_monday_courses_with_teachers_info() 
@@ -444,7 +433,7 @@ def get_teachers_with_average_numberstudents_handler():
 # The tables get sorted by students
 def get_teachers_with_average_numberstudents(): 
     cur = mysql.connection.cursor()
-    query = "SELECT Course.userId, AVG(Course.studentCount) FROM Course ORDER BY AVG(Course.studentCount) DESC;"
+    query = "SELECT Teacher.*, Course.userId, AVG(Course.studentCount) FROM Teacher LEFT JOIN Course ON Teacher.userid = Course.userId GROUP BY Teacher.userid ORDER BY AVG(Course.studentCount) DESC;"
     response = cur.execute(query)
     if response == 0:
         error_message = 'No teachers found'
